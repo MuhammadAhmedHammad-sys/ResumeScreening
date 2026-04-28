@@ -1,0 +1,17 @@
+fastapi
+streamlit
+requests
+
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+joblib
+
+pytest
+
+prefect
+deepchecks
+
+python-multipart
