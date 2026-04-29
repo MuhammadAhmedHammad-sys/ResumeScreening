@@ -1,61 +1,121 @@
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+from typing import Any, Dict, List
+
+import pandas as pd
+import requests
 import streamlit as st
-import matplotlib.pyplot as plt
 
-# Function to calculate the match score
-def match_score(
-        resume_skills,
-        job_skills
-        ):
-    
-    resume_set = set(resume_skills)
-    job_set = set(job_skills)
-    
-    if len(job_set) == 0:
-        return 0.0
-    
-    intersection = resume_set & job_set
-    score = len(intersection) / len(job_set)
-    
-    return score
+BASE_DIR = Path(__file__).resolve().parent
+DATA_PATH = (BASE_DIR / ".." / "data" / "skillset.json").resolve()
+DEFAULT_API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
-# Streamlit UI setup
+st.set_page_config(page_title="ML Prediction App", layout="wide")
 st.title("ML Prediction App")
-st.write("Enter feature values and get a prediction from the model.")
-
-# Inputs for the sets (skills) and numeric features
-skills = ["Python", "Java", "SQL", "Machine Learning", "Data Science", "Deep Learning", "NLP"]
-resume_skills = st.multiselect("Select resume skills",skills )
-job_skills = st.multiselect("Select job skills", skills)
-
-applicant_experience = st.slider("Years of experience", min_value=0, max_value=32, step=1, key='app_exp')
-required_experience = st.slider("Years of experience", min_value=0, max_value=32, step=1, key='req_exp')
+st.write("Enter resume and job details, then rank candidates by model score.")
 
 
-# Calculate match score
-score = match_score(resume_skills, job_skills)
+def load_skills() -> List[str]:
+    if not DATA_PATH.exists():
+        st.warning(f"Skill file not found: {DATA_PATH}. Please add data/skillset.json.")
+        return []
+    with open(DATA_PATH, "r", encoding="utf-8") as f:
+        skills = json.load(f)
+    return sorted([str(s).strip() for s in skills if str(s).strip()])
 
-# Display the match score
-st.write(f"Match score: {score * 100:.2f}%")
 
-# Plotting the donut chart to represent match score
-fig, ax = plt.subplots(figsize=(3, 3))
+all_skills = load_skills()
 
-# Donut chart
-ax.pie([score, 1 - score], labels=["Match", "No Match"], autopct='%1.1f%%', startangle=90, colors=["#2c4fa0", "#A6A6A6"], wedgeprops={'width': 0.4})
+with st.sidebar:
+    st.header("API")
+    api_url = st.text_input("FastAPI base URL", value=DEFAULT_API_URL)
+    st.caption("Example: http://127.0.0.1:8000")
 
-# Equal aspect ratio ensures that pie is drawn as a circle
-ax.axis('equal')  
+if "rows" not in st.session_state:
+    st.session_state.rows = [
+        {"candidate_id": "Candidate 1", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
+    ]
 
-# Add title to the chart
-ax.set_title("Match Score as Donut Chart")
+col_a, col_b = st.columns([1, 1])
+with col_a:
+    if st.button("Add resume row"):
+        st.session_state.rows.append(
+            {"candidate_id": f"Candidate {len(st.session_state.rows) + 1}", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
+        )
+with col_b:
+    if st.button("Reset rows"):
+        st.session_state.rows = [
+            {"candidate_id": "Candidate 1", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
+        ]
 
-# Show the plot
-st.pyplot(fig)
+st.subheader("Candidate batch")
+for idx, row in enumerate(st.session_state.rows):
+    with st.expander(f"{row.get('candidate_id', f'Candidate {idx + 1}')}", expanded=(idx == 0)):
+        row["candidate_id"] = st.text_input("Candidate label", value=row.get("candidate_id", f"Candidate {idx + 1}"), key=f"candidate_id_{idx}")
+        row["resume_skills"] = st.multiselect(
+            "Resume skills",
+            options=all_skills,
+            default=row["resume_skills"],
+            key=f"resume_skills_{idx}",
+        )
+        row["job_skills"] = st.multiselect(
+            "Job skills",
+            options=all_skills,
+            default=row["job_skills"],
+            key=f"job_skills_{idx}",
+        )
+        c1, c2 = st.columns(2)
+        with c1:
+            row["resume_years"] = st.number_input(
+                "Resume years of experience",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(row["resume_years"]),
+                step=1.0,
+                key=f"resume_years_{idx}",
+            )
+        with c2:
+            row["job_years"] = st.number_input(
+                "Required years of experience",
+                min_value=0.0,
+                max_value=100.0,
+                value=float(row["job_years"]),
+                step=1.0,
+                key=f"job_years_{idx}",
+            )
 
-# Optionally: Show a brief interpretation of the result
-if score > 0.8:
-    st.write("The match is very good!")
-elif score > 0.5:
-    st.write("The match is average.")
-else:
-    st.write("The match is low.")
+run = st.button("Predict", type="primary")
+
+if run:
+    payload = {"items": st.session_state.rows}
+    try:
+        resp = requests.post(f"{api_url.rstrip('/')}/predict", json=payload, timeout=60)
+        resp.raise_for_status()
+        data = resp.json()["rows"]
+    except Exception as exc:
+        st.error(f"Prediction request failed: {exc}")
+        st.stop()
+
+    result_df = pd.DataFrame(data)
+    if not result_df.empty:
+        display_cols = [
+            "candidate_id",
+            "ranking",
+            "decision",
+            "score",
+            "probability_accepted",
+            "probability_rejected",
+            "matchscore",
+            "age_gap",
+        ]
+        st.subheader("Results")
+        st.dataframe(result_df[display_cols], use_container_width=True)
+        st.download_button(
+            "Download results as CSV",
+            result_df.to_csv(index=False).encode("utf-8"),
+            file_name="predictions.csv",
+            mime="text/csv",
+        )

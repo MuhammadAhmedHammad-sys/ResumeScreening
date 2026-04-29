@@ -8,6 +8,8 @@ matplotlib
 seaborn
 scikit-learn
 joblib
+xgboost
+nltk
 
 pytest
 
