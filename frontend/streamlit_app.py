@@ -97,6 +97,9 @@ run = st.button("🚀 Run ML Prediction", type="primary", use_container_width=Tr
 # -----------------------------------------
 # PREDICTION & RESULTS SECTION
 # -----------------------------------------
+# -----------------------------------------
+# PREDICTION & RESULTS SECTION
+# -----------------------------------------
 if run:
     payload = {"items": st.session_state.rows}
     
@@ -118,7 +121,9 @@ if run:
         top_candidate = result_df.iloc[0]
         
         st.markdown("### 🏆 Top Match Recommendation")
-        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+        
+        # Changed from 4 columns to 3 columns
+        metric_col1, metric_col2, metric_col3 = st.columns(3)
         
         with metric_col1:
             st.metric(label="Best Candidate", value=top_candidate["candidate_id"])
@@ -127,16 +132,12 @@ if run:
         with metric_col3:
             decision_color = "🟢" if top_candidate['decision'].lower() == "accepted" else "🔴"
             st.metric(label="System Decision", value=f"{decision_color} {top_candidate['decision'].upper()}")
-        with metric_col4:
-            # Safe check in case matchscore is missing from the API response
-            match_val = top_candidate.get('matchscore', 0)
-            st.metric(label="Skill Match Ratio", value=f"{round(match_val * 100)}%")
 
         st.write("")
         st.markdown("### 📊 Detailed Batch Results")
         
-        # Only display columns that actually exist in the DataFrame
-        available_cols = [c for c in ["candidate_id", "ranking", "decision", "score", "probability_accepted", "probability_rejected", "matchscore", "age_gap"] if c in result_df.columns]
+        # Removed 'matchscore' from the list of columns to display
+        available_cols = [c for c in ["candidate_id", "ranking", "decision", "score", "probability_accepted", "probability_rejected", "age_gap"] if c in result_df.columns]
         
         st.dataframe(result_df[available_cols], use_container_width=True, hide_index=True)
         
