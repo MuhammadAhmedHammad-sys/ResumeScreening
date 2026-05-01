@@ -9,14 +9,15 @@ import pandas as pd
 import requests
 import streamlit as st
 
+# -----------------------------------------
+# CONFIG & SETUP
+# -----------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = (BASE_DIR / ".." / "data" / "skillset.json").resolve()
 DEFAULT_API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
-st.set_page_config(page_title="ML Prediction App", layout="wide")
-st.title("ML Prediction App")
-st.write("Enter resume and job details, then rank candidates by model score.")
-
+# Upgraded Page Config
+st.set_page_config(page_title="AI Resume Screener", page_icon="📄", layout="wide")
 
 def load_skills() -> List[str]:
     if not DATA_PATH.exists():
@@ -26,81 +27,119 @@ def load_skills() -> List[str]:
         skills = json.load(f)
     return sorted([str(s).strip() for s in skills if str(s).strip()])
 
-
 all_skills = load_skills()
 
+# -----------------------------------------
+# SIDEBAR
+# -----------------------------------------
 with st.sidebar:
-    st.header("API")
-    api_url = st.text_input("FastAPI base URL", value=DEFAULT_API_URL)
-    st.caption("Example: http://127.0.0.1:8000")
+    st.image("https://cdn-icons-png.flaticon.com/512/942/942748.png", width=80) # Adds a nice icon
+    st.header("System Config")
+    api_url = st.text_input("FastAPI Base URL", value=DEFAULT_API_URL)
+    st.caption("Ensure your FastAPI backend is running.")
+    st.divider()
+    st.write("### Instructions")
+    st.write("1. Add candidate profiles.")
+    st.write("2. Define the job requirements.")
+    st.write("3. Hit Predict to rank the batch.")
+
+# -----------------------------------------
+# MAIN HEADER
+# -----------------------------------------
+st.title("📄 AI Resume Screening Pipeline")
+st.markdown("Automate candidate ranking and decision-making using Machine Learning.")
+st.divider()
 
 if "rows" not in st.session_state:
     st.session_state.rows = [
         {"candidate_id": "Candidate 1", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
     ]
 
-col_a, col_b = st.columns([1, 1])
+# -----------------------------------------
+# CANDIDATE INPUT SECTION
+# -----------------------------------------
+st.markdown("### 👥 Candidate Batch Entry")
+
+# Layout for action buttons
+col_a, col_b, _ = st.columns([1, 1, 4])
 with col_a:
-    if st.button("Add resume row"):
+    if st.button("➕ Add Candidate"):
         st.session_state.rows.append(
             {"candidate_id": f"Candidate {len(st.session_state.rows) + 1}", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
         )
 with col_b:
-    if st.button("Reset rows"):
+    if st.button("🗑️ Reset Batch"):
         st.session_state.rows = [
             {"candidate_id": "Candidate 1", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
         ]
 
-st.subheader("Candidate batch")
+st.write("") # Spacer
+
 for idx, row in enumerate(st.session_state.rows):
-    with st.expander(f"{row.get('candidate_id', f'Candidate {idx + 1}')}", expanded=(idx == 0)):
-        row["candidate_id"] = st.text_input("Candidate label", value=row.get("candidate_id", f"Candidate {idx + 1}"), key=f"candidate_id_{idx}")
-        row["resume_skills"] = st.multiselect(
-            "Resume skills",
-            options=all_skills,
-            default=row["resume_skills"],
-            key=f"resume_skills_{idx}",
-        )
-        row["job_skills"] = st.multiselect(
-            "Job skills",
-            options=all_skills,
-            default=row["job_skills"],
-            key=f"job_skills_{idx}",
-        )
-        c1, c2 = st.columns(2)
-        with c1:
-            row["resume_years"] = st.number_input(
-                "Resume years of experience",
-                min_value=0.0,
-                max_value=100.0,
-                value=float(row["resume_years"]),
-                step=1.0,
-                key=f"resume_years_{idx}",
-            )
-        with c2:
-            row["job_years"] = st.number_input(
-                "Required years of experience",
-                min_value=0.0,
-                max_value=100.0,
-                value=float(row["job_years"]),
-                step=1.0,
-                key=f"job_years_{idx}",
-            )
+    with st.expander(f"👤 {row.get('candidate_id', f'Candidate {idx + 1}')}", expanded=(idx == 0)):
+        
+        # UI UPGRADE: Side-by-Side Columns for cleaner layout
+        c_left, c_right = st.columns(2)
+        
+        with c_left:
+            st.markdown("**Candidate Profile**")
+            row["candidate_id"] = st.text_input("Candidate Label", value=row.get("candidate_id", f"Candidate {idx + 1}"), key=f"candidate_id_{idx}")
+            row["resume_skills"] = st.multiselect("Candidate Skills", options=all_skills, default=row["resume_skills"], key=f"resume_skills_{idx}")
+            row["resume_years"] = st.number_input("Years of Experience", min_value=0.0, max_value=100.0, value=float(row["resume_years"]), step=1.0, key=f"resume_years_{idx}")
+            
+        with c_right:
+            st.markdown("**Job Requirements**")
+            # Added a spacer to align fields visually
+            st.write("") 
+            st.write("") 
+            row["job_skills"] = st.multiselect("Required Skills", options=all_skills, default=row["job_skills"], key=f"job_skills_{idx}")
+            row["job_years"] = st.number_input("Required Years of Exp", min_value=0.0, max_value=100.0, value=float(row["job_years"]), step=1.0, key=f"job_years_{idx}")
 
-run = st.button("Predict", type="primary")
+st.write("") # Spacer
+run = st.button("🚀 Run ML Prediction", type="primary", use_container_width=True)
 
+# -----------------------------------------
+# PREDICTION & RESULTS SECTION
+# -----------------------------------------
 if run:
     payload = {"items": st.session_state.rows}
-    try:
-        resp = requests.post(f"{api_url.rstrip('/')}/predict", json=payload, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()["rows"]
-    except Exception as exc:
-        st.error(f"Prediction request failed: {exc}")
-        st.stop()
+    
+    # UI UPGRADE: Add a spinner while waiting for the API
+    with st.spinner("Analyzing candidate batch via XGBoost..."):
+        try:
+            resp = requests.post(f"{api_url.rstrip('/')}/predict", json=payload, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()["rows"]
+        except Exception as exc:
+            st.error(f"Prediction request failed: {exc}")
+            st.stop()
 
     result_df = pd.DataFrame(data)
+    
     if not result_df.empty:
+        st.success("Batch processing complete!")
+        st.divider()
+        
+        # UI UPGRADE: The "Hero" Spotlight for the top candidate
+        top_candidate = result_df.iloc[0]
+        
+        st.markdown("### 🏆 Top Match Recommendation")
+        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+        
+        with metric_col1:
+            st.metric(label="Best Candidate", value=top_candidate["candidate_id"])
+        with metric_col2:
+            st.metric(label="AI Confidence Score", value=f"{top_candidate['score']}%")
+        with metric_col3:
+            # Color code the decision
+            decision_color = "🟢" if top_candidate['decision'].lower() == "accepted" else "🔴"
+            st.metric(label="System Decision", value=f"{decision_color} {top_candidate['decision'].upper()}")
+        with metric_col4:
+            st.metric(label="Skill Match Ratio", value=f"{round(top_candidate['matchscore'] * 100)}%")
+
+        st.write("")
+        st.markdown("### 📊 Detailed Batch Results")
+        
         display_cols = [
         "candidate_id",
         "ranking",
@@ -124,7 +163,7 @@ if run:
         )
 
         st.download_button(
-            "Download results as CSV",
+            "📥 Download Results as CSV",
             result_df.to_csv(index=False).encode("utf-8"),
             file_name="predictions.csv",
             mime="text/csv",
