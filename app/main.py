@@ -25,11 +25,6 @@ class BatchRequest(BaseModel):
 class PredictionRow(BaseModel):
     candidate_id: str | None = None
     ranking: int
-    matchscore: float
-    age_gap: float
-    prediction: int | str
-    probability_accepted: float
-    probability_rejected: float
     score: float
     decision: str
 
@@ -49,13 +44,12 @@ def predict(request: BatchRequest):
         raise HTTPException(status_code=400, detail="No records provided")
 
     df = predict_batch(
-        resume_skills=[item.resume_skills for item in request.items],
-        job_skills=[item.job_skills for item in request.items],
-        resume_years=[item.resume_years for item in request.items],
-        job_years=[item.job_years for item in request.items],
-    )
-
-    rows = df.to_dict(orient="records")
-    for idx, row in enumerate(rows):
-        row["candidate_id"] = request.items[idx].candidate_id or f"Candidate {idx + 1}"
+    candidate_ids=[item.candidate_id for item in request.items],
+    resume_skills=[item.resume_skills for item in request.items],
+    job_skills=[item.job_skills for item in request.items],
+    resume_years=[item.resume_years for item in request.items],
+    job_years=[item.job_years for item in request.items],
+)
+    
+    rows = df[["candidate_id", "ranking", "decision", "score"]].to_dict(orient="records")
     return {"rows": rows}

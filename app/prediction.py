@@ -91,12 +91,12 @@ def _positive_class_index(model) -> int:
 
 
 def predict_batch(
+    candidate_ids: Sequence[str | None],
     resume_skills: Sequence[Iterable[str] | str],
     job_skills: Sequence[Iterable[str] | str],
     resume_years: Sequence[float],
     job_years: Sequence[float],
 ) -> pd.DataFrame:
-    """Return predictions and ranking for a batch of resumes."""
     clf = load_model()
     X = build_feature_frame(resume_skills, job_skills, resume_years, job_years)
 
@@ -105,6 +105,10 @@ def predict_batch(
     pos_idx = _positive_class_index(clf)
 
     result_df = X.copy()
+    result_df["candidate_id"] = [
+        cid if cid else f"Candidate {i+1}" for i, cid in enumerate(candidate_ids)
+    ]
+
     result_df["prediction"] = predictions
     result_df["probability_accepted"] = probabilities[:, pos_idx]
     result_df["probability_rejected"] = 1 - result_df["probability_accepted"]
@@ -113,4 +117,5 @@ def predict_batch(
     result_df["decision"] = result_df["prediction"].apply(
         lambda x: "accepted" if str(x) in {"1", "True", "true", "accepted", "accept"} or x == 1 else "rejected"
     )
+
     return result_df.sort_values(["ranking", "score"], ascending=[True, False]).reset_index(drop=True)

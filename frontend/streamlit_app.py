@@ -102,17 +102,27 @@ if run:
     result_df = pd.DataFrame(data)
     if not result_df.empty:
         display_cols = [
-            "candidate_id",
-            "ranking",
-            "decision",
-            "score",
-            "probability_accepted",
-            "probability_rejected",
-            "matchscore",
-            "age_gap",
+        "candidate_id",
+        "ranking",
+        "decision",
+        "score",
         ]
         st.subheader("Results")
-        st.dataframe(result_df[display_cols], use_container_width=True)
+        
+        result_df["score_bar"] = result_df["score"] / 100
+
+        st.dataframe(
+            result_df[["candidate_id", "ranking", "decision", "score", "score_bar"]],
+            column_config={
+                "score_bar": st.column_config.ProgressColumn(
+                    "Score",
+                    min_value=0,
+                    max_value=1,
+                ),
+            },
+            use_container_width=True,
+        )
+
         st.download_button(
             "Download results as CSV",
             result_df.to_csv(index=False).encode("utf-8"),
