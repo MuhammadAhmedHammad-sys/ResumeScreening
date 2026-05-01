@@ -16,7 +16,6 @@ BASE_DIR = Path(__file__).resolve().parent
 DATA_PATH = (BASE_DIR / ".." / "data" / "skillset.json").resolve()
 DEFAULT_API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
 
-# Upgraded Page Config
 st.set_page_config(page_title="AI Resume Screener", page_icon="📄", layout="wide")
 
 def load_skills() -> List[str]:
@@ -33,7 +32,7 @@ all_skills = load_skills()
 # SIDEBAR
 # -----------------------------------------
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/942/942748.png", width=80) # Adds a nice icon
+    st.image("https://cdn-icons-png.flaticon.com/512/942/942748.png", width=80)
     st.header("System Config")
     api_url = st.text_input("FastAPI Base URL", value=DEFAULT_API_URL)
     st.caption("Ensure your FastAPI backend is running.")
@@ -60,7 +59,6 @@ if "rows" not in st.session_state:
 # -----------------------------------------
 st.markdown("### 👥 Candidate Batch Entry")
 
-# Layout for action buttons
 col_a, col_b, _ = st.columns([1, 1, 4])
 with col_a:
     if st.button("➕ Add Candidate"):
@@ -73,12 +71,11 @@ with col_b:
             {"candidate_id": "Candidate 1", "resume_skills": [], "job_skills": [], "resume_years": 0, "job_years": 0}
         ]
 
-st.write("") # Spacer
+st.write("") 
 
 for idx, row in enumerate(st.session_state.rows):
     with st.expander(f"👤 {row.get('candidate_id', f'Candidate {idx + 1}')}", expanded=(idx == 0)):
         
-        # UI UPGRADE: Side-by-Side Columns for cleaner layout
         c_left, c_right = st.columns(2)
         
         with c_left:
@@ -89,13 +86,12 @@ for idx, row in enumerate(st.session_state.rows):
             
         with c_right:
             st.markdown("**Job Requirements**")
-            # Added a spacer to align fields visually
             st.write("") 
             st.write("") 
             row["job_skills"] = st.multiselect("Required Skills", options=all_skills, default=row["job_skills"], key=f"job_skills_{idx}")
             row["job_years"] = st.number_input("Required Years of Exp", min_value=0.0, max_value=100.0, value=float(row["job_years"]), step=1.0, key=f"job_years_{idx}")
 
-st.write("") # Spacer
+st.write("")
 run = st.button("🚀 Run ML Prediction", type="primary", use_container_width=True)
 
 # -----------------------------------------
@@ -104,7 +100,6 @@ run = st.button("🚀 Run ML Prediction", type="primary", use_container_width=Tr
 if run:
     payload = {"items": st.session_state.rows}
     
-    # UI UPGRADE: Add a spinner while waiting for the API
     with st.spinner("Analyzing candidate batch via XGBoost..."):
         try:
             resp = requests.post(f"{api_url.rstrip('/')}/predict", json=payload, timeout=60)
@@ -120,7 +115,6 @@ if run:
         st.success("Batch processing complete!")
         st.divider()
         
-        # UI UPGRADE: The "Hero" Spotlight for the top candidate
         top_candidate = result_df.iloc[0]
         
         st.markdown("### 🏆 Top Match Recommendation")
@@ -131,37 +125,21 @@ if run:
         with metric_col2:
             st.metric(label="AI Confidence Score", value=f"{top_candidate['score']}%")
         with metric_col3:
-            # Color code the decision
             decision_color = "🟢" if top_candidate['decision'].lower() == "accepted" else "🔴"
             st.metric(label="System Decision", value=f"{decision_color} {top_candidate['decision'].upper()}")
         with metric_col4:
-            st.metric(label="Skill Match Ratio", value=f"{round(top_candidate['matchscore'] * 100)}%")
+            # Safe check in case matchscore is missing from the API response
+            match_val = top_candidate.get('matchscore', 0)
+            st.metric(label="Skill Match Ratio", value=f"{round(match_val * 100)}%")
 
         st.write("")
         st.markdown("### 📊 Detailed Batch Results")
         
-        display_cols = [
-        "candidate_id",
-        "ranking",
-        "decision",
-        "score",
-        ]
-        st.subheader("Results")
+        # Only display columns that actually exist in the DataFrame
+        available_cols = [c for c in ["candidate_id", "ranking", "decision", "score", "probability_accepted", "probability_rejected", "matchscore", "age_gap"] if c in result_df.columns]
         
-        result_df["score_bar"] = result_df["score"] / 100
-
-        st.dataframe(
-            result_df[["candidate_id", "ranking", "decision", "score", "score_bar"]],
-            column_config={
-                "score_bar": st.column_config.ProgressColumn(
-                    "Score",
-                    min_value=0,
-                    max_value=1,
-                ),
-            },
-            use_container_width=True,
-        )
-
+        st.dataframe(result_df[available_cols], use_container_width=True, hide_index=True)
+        
         st.download_button(
             "📥 Download Results as CSV",
             result_df.to_csv(index=False).encode("utf-8"),
