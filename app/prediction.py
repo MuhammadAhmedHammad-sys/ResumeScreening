@@ -8,14 +8,15 @@ import joblib
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = (BASE_DIR / ".." / "models" / "xgb.pkl").resolve()
+# CHANGED: Now points to the newly trained xgb_v2.pkl model!
+MODEL_PATH = (BASE_DIR / ".." / "models" / "xgb_v2.pkl").resolve()
 
 
 def load_model():
     """Load the trained model from disk."""
     if not MODEL_PATH.exists():
         raise FileNotFoundError(
-            f"Model not found at {MODEL_PATH}. Place the trained xgb.pkl file there."
+            f"Model not found at {MODEL_PATH}. Place the trained xgb_v2.pkl file there."
         )
     return joblib.load(MODEL_PATH)
 
