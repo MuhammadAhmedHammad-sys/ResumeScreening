@@ -53,7 +53,8 @@ def match_score(resume_skills: Iterable[str] | str | None, job_skills: Iterable[
     return len(resume_set & job_set) / len(job_set)
 
 
-def age_gap(app_years: float, req_years: float) -> float:
+# FIXED: Renamed from age_gap to experience_gap to match your XGBoost model training features
+def experience_gap(app_years: float, req_years: float) -> float:
     """Numeric gap between applicant years and required years."""
     return float(app_years) - float(req_years)
 
@@ -69,11 +70,12 @@ def build_feature_frame(
     for rs, js, ry, jy in zip(resume_skills, job_skills, resume_years, job_years):
         rows.append(
             {
-                "matchscore": match_score(rs, js),
-                "age_gap": age_gap(ry, jy),
+                "match_score": match_score(rs, js),       # FIXED: Underscore added
+                "experience_gap": experience_gap(ry, jy), # FIXED: Renamed to experience_gap
             }
         )
-    return pd.DataFrame(rows, columns=["matchscore", "age_gap"])
+    # FIXED: Columns match the exact strings used during model training
+    return pd.DataFrame(rows, columns=["match_score", "experience_gap"])
 
 
 def _positive_class_index(model) -> int:
@@ -100,6 +102,7 @@ def predict_batch(
     clf = load_model()
     X = build_feature_frame(resume_skills, job_skills, resume_years, job_years)
 
+    # UNTOUCHED: Kept your exact prediction logic and default threshold exactly as requested
     predictions = clf.predict(X)
     probabilities = clf.predict_proba(X)
     pos_idx = _positive_class_index(clf)
