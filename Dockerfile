@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 # (Make sure you have a requirements.txt file with fastapi, streamlit, xgboost, etc.)
 COPY requirements.txt .
 
-RUN pip install --no-cache-dir -r requirements.tx
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 6. Copy your entire project into the container
 COPY . .
