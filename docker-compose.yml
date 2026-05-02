@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # --- The FastAPI Backend ---
+  api:
+    build: .
+    # The command to start FastAPI
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app # Syncs your local code to the container so you don't have to rebuild on every edit
+
+  # --- The Streamlit Frontend ---
+  frontend:
+    build: .
+    # The command to start Streamlit
+    command: streamlit run frontend/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      # CRITICAL: Inside Docker, "localhost" doesn't work between containers. 
+      # Streamlit must talk to the backend using the service name "api"
+      - API_URL=http://api:8000
+    depends_on:
+      - api # Tells Docker to start the backend BEFORE the frontend
