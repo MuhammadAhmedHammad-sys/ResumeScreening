@@ -134,8 +134,6 @@ if run:
             # Color code the decision
             decision_color = "🟢" if top_candidate['decision'].lower() == "accepted" else "🔴"
             st.metric(label="System Decision", value=f"{decision_color} {top_candidate['decision'].upper()}")
-        with metric_col4:
-            st.metric(label="Skill Match Ratio", value=f"{round(top_candidate['matchscore'] * 100)}%")
 
         st.write("")
         st.markdown("### 📊 Detailed Batch Results")
