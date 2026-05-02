@@ -28,6 +28,37 @@ def load_skills() -> List[str]:
 
 all_skills = load_skills()
 
+# --- MATH FUNCTION ---
+def calculate_match_score(resume_skills: List[str], job_skills: List[str]) -> float:
+    """Calculates Jaccard Similarity between two lists of skills."""
+    if not job_skills and not resume_skills:
+        return 0.0
+    
+    set_resume = set(s.lower() for s in resume_skills)
+    set_job = set(s.lower() for s in job_skills)
+    
+    intersection = len(set_resume.intersection(set_job))
+    union = len(set_resume.union(set_job))
+    
+    return round(intersection / union, 2) if union > 0 else 0.0
+
+# --- NEW: CALLBACK FUNCTION FOR BUTTONS ---
+def handle_feedback(cid: str, match_score: float, exp_gap: float, decision: int, api_endpoint: str):
+    """Sends data to backend and updates Streamlit memory synchronously before the UI re-renders."""
+    payload = {
+        "candidate_id": cid,
+        "match_score": float(match_score),
+        "experience_gap": float(exp_gap),
+        "final_decision": int(decision)
+    }
+    try:
+        requests.post(f"{api_endpoint.rstrip('/')}/feedback", json=payload, timeout=5)
+    except Exception as e:
+        print(f"Error saving feedback: {e}")
+        
+    # Add to memory so the button hides immediately on the next render
+    st.session_state.submitted_feedback.add(cid)
+
 # -----------------------------------------
 # SIDEBAR
 # -----------------------------------------
@@ -97,9 +128,12 @@ run = st.button("🚀 Run ML Prediction", type="primary", use_container_width=Tr
 # -----------------------------------------
 # PREDICTION & RESULTS SECTION
 # -----------------------------------------
-# -----------------------------------------
-# PREDICTION & RESULTS SECTION
-# -----------------------------------------
+if "prediction_data" not in st.session_state:
+    st.session_state.prediction_data = None
+    
+if "submitted_feedback" not in st.session_state:
+    st.session_state.submitted_feedback = set()
+
 if run:
     payload = {"items": st.session_state.rows}
     
@@ -107,12 +141,16 @@ if run:
         try:
             resp = requests.post(f"{api_url.rstrip('/')}/predict", json=payload, timeout=60)
             resp.raise_for_status()
-            data = resp.json()["rows"]
+            
+            st.session_state.prediction_data = resp.json()["rows"]
+            st.session_state.submitted_feedback.clear() 
+            
         except Exception as exc:
             st.error(f"Prediction request failed: {exc}")
             st.stop()
 
-    result_df = pd.DataFrame(data)
+if st.session_state.prediction_data is not None:
+    result_df = pd.DataFrame(st.session_state.prediction_data)
     
     if not result_df.empty:
         st.success("Batch processing complete!")
@@ -122,23 +160,70 @@ if run:
         
         st.markdown("### 🏆 Top Match Recommendation")
         
-        # Changed from 4 columns to 3 columns
         metric_col1, metric_col2, metric_col3 = st.columns(3)
-        
         with metric_col1:
             st.metric(label="Best Candidate", value=top_candidate["candidate_id"])
         with metric_col2:
-            st.metric(label="AI Confidence Score", value=f"{top_candidate['score']}%")
+            top_score_display = round(float(top_candidate['score']), 2)
+            st.metric(label="AI Confidence Score", value=f"{top_score_display}%")
         with metric_col3:
             decision_color = "🟢" if top_candidate['decision'].lower() == "accepted" else "🔴"
             st.metric(label="System Decision", value=f"{decision_color} {top_candidate['decision'].upper()}")
 
         st.write("")
+        st.divider()
+        
+        # -----------------------------------------
+        # ALL CANDIDATES FEEDBACK LOOP
+        # -----------------------------------------
+        st.markdown("### 👨‍💼 Batch Review & Ground Truth")
+        st.info("Review each candidate. Buttons will disappear immediately after you click them to prevent duplicate entries.")
+        
+        for idx, row in result_df.iterrows():
+            cid = str(row["candidate_id"])
+            
+            # Get user input for this candidate
+            original_candidate = next((item for item in st.session_state.rows if str(item["candidate_id"]) == cid), None)
+            
+            # Calculate real data
+            if original_candidate:
+                real_match_score = calculate_match_score(original_candidate["resume_skills"], original_candidate["job_skills"])
+                real_exp_gap = float(original_candidate["resume_years"]) - float(original_candidate["job_years"])
+            else:
+                real_match_score = 0.0
+                real_exp_gap = 0.0
+                
+            score_display = round(float(row['score']), 2)
+            st.markdown(f"**👤 {cid}** | AI Score: **{score_display}%** | Actual Match: **{real_match_score}** | Exp Gap: **{real_exp_gap}**")
+            
+            # Hide buttons if already clicked
+            if cid in st.session_state.submitted_feedback:
+                st.success(f"✅ Ground truth saved for {cid}")
+            else:
+                fb_col1, fb_col2, _ = st.columns([1, 1, 3])
+                
+                with fb_col1:
+                    # Professional Streamlit Callback method
+                    st.button(
+                        f"Hire {cid}", 
+                        key=f"hire_{cid}", 
+                        type="primary",
+                        on_click=handle_feedback,
+                        args=(cid, real_match_score, real_exp_gap, 1, api_url)
+                    )
+                        
+                with fb_col2:
+                    st.button(
+                        f"Reject {cid}", 
+                        key=f"reject_{cid}",
+                        on_click=handle_feedback,
+                        args=(cid, real_match_score, real_exp_gap, 0, api_url)
+                    )
+            st.write("---")
+
+        # -----------------------------------------
         st.markdown("### 📊 Detailed Batch Results")
-        
-        # Removed 'matchscore' from the list of columns to display
         available_cols = [c for c in ["candidate_id", "ranking", "decision", "score", "probability_accepted", "probability_rejected", "age_gap"] if c in result_df.columns]
-        
         st.dataframe(result_df[available_cols], use_container_width=True, hide_index=True)
         
         st.download_button(

@@ -16,10 +16,8 @@ RUN apt-get update && apt-get install -y \
 # 5. Copy your requirements file and install dependencies
 # (Make sure you have a requirements.txt file with fastapi, streamlit, xgboost, etc.)
 COPY requirements.txt .
-# We add a trusted mirror (PyPi China or Cloudflare) which is often faster/more stable
-RUN pip install --no-cache-dir --default-timeout=2000 \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    -r requirements.txt
+
+RUN pip install --no-cache-dir -r requirements.tx
 
 # 6. Copy your entire project into the container
 COPY . .
