@@ -2,7 +2,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 # Import your FastAPI app from your main file
-# (Assuming your app instance is named 'app' inside app/main.py)
 from app.main import app 
 
 client = TestClient(app)
@@ -32,20 +31,16 @@ def test_predict_endpoint():
     assert "rows" in data
     assert len(data["rows"]) == 1
     
-    # 3. Verify the math and features are correct based on our recent updates!
+    # 3. Verify the final API payload contains the correct output keys
     result_row = data["rows"][0]
     assert result_row["candidate_id"] == "Test Candidate 1"
     assert "score" in result_row
     assert "decision" in result_row
-    
-    # Verify our specific feature renaming was successful
-    assert "experience_gap" in result_row
-    assert result_row["experience_gap"] == 2.0  # 4.0 resume_years - 2.0 job_years
+    assert "ranking" in result_row  # Replaced experience_gap with ranking!
 
 
 def test_feedback_endpoint():
     """Test that the feedback loop successfully accepts data."""
-    # Notice: We removed parsed_resume here, just like we did in the frontend!
     payload = {
         "candidate_id": "Test Candidate 1",
         "match_score": 0.75,
